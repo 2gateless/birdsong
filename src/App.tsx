@@ -128,10 +128,11 @@ const KOREAN_TO_SCIENTIFIC: Record<string, string> = {
   "지빠귀": "Turdus naumanni",
 };
 
-// 학명 → 한국어 역방향 매핑
-const SCIENTIFIC_TO_KOREAN = Object.fromEntries(
+// 학명 → 한국어 역방향 매핑 (향후 확장용)
+const _SCIENTIFIC_TO_KOREAN = Object.fromEntries(
   Object.entries(KOREAN_TO_SCIENTIFIC).map(([k, v]) => [v.toLowerCase(), k])
 );
+void _SCIENTIFIC_TO_KOREAN;
 
 function App() {
   const [inputMode, setInputMode] = useState<InputMode>('search');
@@ -190,33 +191,94 @@ function App() {
     }
   };
 
+  // 오디오 Blob → 스펙트로그램 JPEG base64 생성 (Web Audio API + Canvas)
+  const generateSpectrogram = async (audio: Blob | File): Promise<string> => {
+    const arrayBuffer = await audio.arrayBuffer();
+    const audioCtx = new AudioContext();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    await audioCtx.close();
+
+    const channelData = audioBuffer.getChannelData(0);
+    const fftSize = 512;
+    const hopSize = 256;
+    const numFrames = Math.floor((channelData.length - fftSize) / hopSize);
+    const numFreqs = fftSize / 2;
+
+    // 간단한 DFT (FFT 근사) 계산
+    const hann = (i: number) => 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)));
+    const getMagnitudes = (start: number): Float32Array => {
+      const mags = new Float32Array(numFreqs);
+      for (let k = 0; k < numFreqs; k++) {
+        let re = 0, im = 0;
+        for (let n = 0; n < fftSize; n++) {
+          const sample = channelData[start + n] * hann(n);
+          const angle = (2 * Math.PI * k * n) / fftSize;
+          re += sample * Math.cos(angle);
+          im -= sample * Math.sin(angle);
+        }
+        mags[k] = Math.sqrt(re * re + im * im);
+      }
+      return mags;
+    };
+
+    // Canvas에 스펙트로그램 그리기
+    const canvasWidth = Math.min(numFrames, 400);
+    const canvasHeight = numFreqs;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    const ctx = canvas.getContext('2d')!;
+    const imageData = ctx.createImageData(canvasWidth, canvasHeight);
+
+    const step = Math.max(1, Math.floor(numFrames / canvasWidth));
+    let globalMax = 0;
+    const allMags: Float32Array[] = [];
+    for (let col = 0; col < canvasWidth; col++) {
+      const frame = col * step;
+      const mags = getMagnitudes(frame * hopSize);
+      allMags.push(mags);
+      for (let f = 0; f < numFreqs; f++) if (mags[f] > globalMax) globalMax = mags[f];
+    }
+
+    for (let col = 0; col < canvasWidth; col++) {
+      const mags = allMags[col];
+      for (let f = 0; f < numFreqs; f++) {
+        const norm = globalMax > 0 ? mags[f] / globalMax : 0;
+        const brightness = Math.floor(norm * 255);
+        const idx = ((numFreqs - 1 - f) * canvasWidth + col) * 4;
+        imageData.data[idx] = brightness;
+        imageData.data[idx + 1] = Math.floor(brightness * 0.6);
+        imageData.data[idx + 2] = 255 - brightness;
+        imageData.data[idx + 3] = 255;
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    // JPEG base64로 변환
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    return dataUrl.split(',')[1];
+  };
+
   const identifyFromAudio = async (audio: Blob | File) => {
     setAppState('identifying');
     setErrorMsg('');
 
-    // 오디오를 base64로 변환
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(audio);
-    });
-
     try {
+      // 스펙트로그램 생성 후 Claude Vision API로 전송
+      const spectrogram = await generateSpectrogram(audio);
+
       const res = await fetch('/.netlify/functions/identify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio: base64, mimeType: audio.type || 'audio/webm' }),
+        body: JSON.stringify({ spectrogram }),
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const results: Array<{ scientific_name: string; common_name: string; confidence: number }> = await res.json();
+      const { birdName } = await res.json() as { birdName: string | null };
 
-      if (results.length > 0 && results[0].confidence > 0.1) {
-        const top = results[0];
-        const koreanName = SCIENTIFIC_TO_KOREAN[top.scientific_name.toLowerCase()] ?? top.common_name;
-        const info = await searchData(koreanName);
+      if (birdName) {
+        const info = await searchData(birdName);
         setBirdInfo(info);
         setAppState('result');
       } else {
