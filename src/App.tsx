@@ -199,16 +199,21 @@ function App() {
     await audioCtx.close();
 
     const channelData = audioBuffer.getChannelData(0);
-    const fftSize = 512;
+    const sampleRate = audioBuffer.sampleRate;
+    const fftSize = 1024;
     const hopSize = 256;
     const numFrames = Math.floor((channelData.length - fftSize) / hopSize);
     const numFreqs = fftSize / 2;
 
+    // 새소리 주파수 구간(0~10kHz)만 사용
+    const maxFreqHz = 10000;
+    const maxBin = Math.min(numFreqs, Math.floor(maxFreqHz / (sampleRate / fftSize)));
+
     // 간단한 DFT (FFT 근사) 계산
     const hann = (i: number) => 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)));
     const getMagnitudes = (start: number): Float32Array => {
-      const mags = new Float32Array(numFreqs);
-      for (let k = 0; k < numFreqs; k++) {
+      const mags = new Float32Array(maxBin);
+      for (let k = 0; k < maxBin; k++) {
         let re = 0, im = 0;
         for (let n = 0; n < fftSize; n++) {
           const sample = channelData[start + n] * hann(n);
@@ -216,14 +221,15 @@ function App() {
           re += sample * Math.cos(angle);
           im -= sample * Math.sin(angle);
         }
-        mags[k] = Math.sqrt(re * re + im * im);
+        // dB 스케일 적용: 새소리의 동적 범위를 잘 표현
+        mags[k] = 20 * Math.log10(Math.sqrt(re * re + im * im) + 1e-10);
       }
       return mags;
     };
 
     // Canvas에 스펙트로그램 그리기
     const canvasWidth = Math.min(numFrames, 400);
-    const canvasHeight = numFreqs;
+    const canvasHeight = maxBin;
     const canvas = document.createElement('canvas');
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
@@ -231,21 +237,29 @@ function App() {
     const imageData = ctx.createImageData(canvasWidth, canvasHeight);
 
     const step = Math.max(1, Math.floor(numFrames / canvasWidth));
-    let globalMax = 0;
     const allMags: Float32Array[] = [];
+    let globalMax = -Infinity;
+    let globalMin = Infinity;
     for (let col = 0; col < canvasWidth; col++) {
       const frame = col * step;
       const mags = getMagnitudes(frame * hopSize);
       allMags.push(mags);
-      for (let f = 0; f < numFreqs; f++) if (mags[f] > globalMax) globalMax = mags[f];
+      for (let f = 0; f < maxBin; f++) {
+        if (mags[f] > globalMax) globalMax = mags[f];
+        if (mags[f] < globalMin) globalMin = mags[f];
+      }
     }
+
+    // dB 범위를 80dB로 제한해 노이즈 플로어 억제
+    const dbRange = Math.min(globalMax - globalMin, 80);
+    const dbFloor = globalMax - dbRange;
 
     for (let col = 0; col < canvasWidth; col++) {
       const mags = allMags[col];
-      for (let f = 0; f < numFreqs; f++) {
-        const norm = globalMax > 0 ? mags[f] / globalMax : 0;
+      for (let f = 0; f < maxBin; f++) {
+        const norm = dbRange > 0 ? Math.max(0, (mags[f] - dbFloor) / dbRange) : 0;
         const brightness = Math.floor(norm * 255);
-        const idx = ((numFreqs - 1 - f) * canvasWidth + col) * 4;
+        const idx = ((maxBin - 1 - f) * canvasWidth + col) * 4;
         imageData.data[idx] = brightness;
         imageData.data[idx + 1] = Math.floor(brightness * 0.6);
         imageData.data[idx + 2] = 255 - brightness;
