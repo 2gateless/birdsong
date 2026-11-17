@@ -222,7 +222,7 @@ export async function analyzeAudioBlob(blob: Blob): Promise<{
   }
 }
 
-const API_KEY_STORAGE_KEY = 'birdsong_anthropic_api_key_v1';
+const API_KEY_STORAGE_KEY = 'birdsong_gemini_api_key_v1';
 
 export function getStoredApiKey(): string {
   try {
@@ -245,9 +245,19 @@ export function setStoredApiKey(key: string): void {
   }
 }
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 /**
- * 스펙트로그램과 음향 특징을 바탕으로 새를 동정합니다.
- * 브라우저에 저장된 Anthropic API 키가 있으면 Claude Vision API를 직접 호출하고,
+ * 스펙트로그램과 실제 오디오를 바탕으로 새를 동정합니다.
+ * 브라우저에 저장된 Google Gemini API 키가 있으면 Gemini 멀티모달 API를 직접 호출하고,
  * 키가 없거나 오프라인/오류 시에는 주파수 대역 기반 산새 추천으로 자동 전환합니다.
  */
 export async function identifyBirdFromAudio(
@@ -259,7 +269,7 @@ export async function identifyBirdFromAudio(
 
   const apiKey = getStoredApiKey();
   let notice =
-    'API 키가 설정되지 않아 녹음된 주요 주파수 대역을 기준으로 유사 산새 후보를 추천했습니다. 상단 열쇠 아이콘에서 API 키를 입력하면 AI 정밀 동정을 사용할 수 있습니다.';
+    'Google Gemini API 키가 설정되지 않아 녹음된 주요 주파수 대역을 기준으로 유사 산새 후보를 추천했습니다. 상단 열쇠 아이콘에서 Gemini API 키를 입력하면 AI 정밀 동정을 사용할 수 있습니다.';
 
   if (apiKey) {
     const envLabel =
@@ -269,52 +279,75 @@ export async function identifyBirdFromAudio(
           ? '산림/등산로'
           : '일반 야외';
 
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-          'content-type': 'application/json',
+    const parts: (
+      | { text: string }
+      | { inline_data: { mime_type: string; data: string } }
+    )[] = [
+      {
+        inline_data: {
+          mime_type: 'image/jpeg',
+          data: spectrogramBase64,
         },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 300,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: 'image/jpeg',
-                    data: spectrogramBase64,
-                  },
-                },
-                {
-                  type: 'text',
-                  text: `이것은 한국 야외에서 녹음한 새소리의 스펙트로그램(세로: 주파수 kHz, 가로: 시간 초)입니다.
+      },
+    ];
+
+    // 오디오 파일이 4MB 이하이면 실제 소리 데이터도 함께 전달해 정밀도 향상
+    if (blob.size > 0 && blob.size <= 4 * 1024 * 1024) {
+      try {
+        const audioBase64 = await blobToBase64(blob);
+        const rawMime = (blob.type || 'audio/webm').split(';')[0].trim();
+        parts.push({
+          inline_data: {
+            mime_type: rawMime || 'audio/webm',
+            data: audioBase64,
+          },
+        });
+      } catch {
+        // 오디오 인코딩 실패 시 스펙트로그램 이미지만 사용
+      }
+    }
+
+    parts.push({
+      text: `이것은 한국 야외에서 녹음한 새소리의 스펙트로그램(세로: 주파수 kHz, 가로: 시간 초)과 원본 오디오입니다.
 참고 정보: 관찰 환경: ${envLabel} / 주요 피크 주파수: 약 ${peakFreqHz}Hz / 녹음 길이: ${durationSec}초
 
-스펙트로그램의 주파수 대역, 음절 간격, 하모닉/트릴/하강·상승 패턴을 분석하여 한국에서 서식하는 가장 가능성 높은 새 후보를 최대 3종까지 JSON으로 답하세요.
-새소리가 전혀 보이지 않거나 판별이 불가능하면 candidates를 빈 배열 []로 반환하세요.
+주파수 대역, 음절 간격, 하모닉/트릴/하강·상승 패턴 및 실제 울음소리를 분석하여 한국에서 서식하는 가장 가능성 높은 새 후보를 최대 3종까지 JSON으로 답하세요.
+새소리가 전혀 들리지 않거나 판별이 불가능하면 candidates를 빈 배열 []로 반환하세요.
 
-반드시 아래 JSON 형식만 출력하세요(마크다운 코드블록 없이):
+반드시 아래 JSON 형식만 출력하세요:
 {"candidates":[{"name":"박새","confidence":"high","reason":"3~6kHz 대역의 규칙적인 2~3음절 반복 패턴"}]}`,
-                },
-              ],
+    });
+
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(
+          apiKey,
+        )}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 350,
+              responseMimeType: 'application/json',
             },
-          ],
-        }),
-      });
+          }),
+        },
+      );
 
       if (res.ok) {
         const data = (await res.json()) as {
-          content?: { text?: string }[];
+          candidates?: {
+            content?: {
+              parts?: { text?: string }[];
+            };
+          }[];
         };
-        const raw = (data.content?.[0]?.text ?? '').trim();
+        const raw = (data.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim();
         const jsonMatch = /\{[\s\S]*\}/.exec(raw);
         let candidates: IdentificationCandidate[] = [];
 
@@ -363,9 +396,9 @@ export async function identifyBirdFromAudio(
           'AI가 뚜렷한 새소리를 판별하지 못해 주파수 대역 기반 유사 산새 후보를 표시합니다.';
       } else {
         notice =
-          res.status === 401
-            ? 'API 키가 올바르지 않습니다(401). 상단 설정에서 키를 확인해주세요. 우선 주파수 기반 후보를 표시합니다.'
-            : `AI API 오류(${res.status})로 인해 주파수 기반 유사 산새 후보를 표시합니다.`;
+          res.status === 400 || res.status === 403
+            ? `Google Gemini API 키가 올바르지 않거나 권한이 없습니다(${res.status}). 상단 설정에서 키를 확인해주세요. 우선 주파수 기반 후보를 표시합니다.`
+            : `Gemini API 오류(${res.status})로 인해 주파수 기반 유사 산새 후보를 표시합니다.`;
       }
     } catch {
       notice =

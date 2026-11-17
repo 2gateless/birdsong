@@ -375,69 +375,70 @@ function App() {
   return (
     <div className="min-h-screen pt-3 pb-24 px-4 md:px-0 md:max-w-md mx-auto relative flex flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between py-4">
+      <header className="relative flex flex-col items-center pt-4 pb-3 space-y-4">
         <button
-          onClick={handleReset}
-          className="flex items-center space-x-2 text-primary text-left"
+          onClick={() => {
+            setApiKeyInput(getStoredApiKey());
+            setApiKeyModalOpen(true);
+          }}
+          title={hasApiKey ? 'Google Gemini API 키 설정됨' : 'Google Gemini API 키 설정'}
+          className={`absolute right-0 top-4 w-9 h-9 rounded-full border flex items-center justify-center transition-all ${
+            hasApiKey
+              ? 'bg-emerald-500/20 border-emerald-400/70 text-emerald-300'
+              : 'bg-slate-800/80 border-slate-700/80 text-slate-400 hover:text-white'
+          }`}
         >
-          <Bird size={28} strokeWidth={2.5} />
-          <div>
-            <h1 className="text-xl font-bold leading-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-teal-300">
-              Birdsong
-            </h1>
-            <p className="text-[11px] text-slate-400 leading-none">산행 새소리 동정 · 도감</p>
-          </div>
+          <KeyRound size={15} />
         </button>
 
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center gap-1 bg-slate-800/80 border border-slate-700/80 rounded-full p-1">
-            <button
-              onClick={() => switchTab('listen')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 transition-all ${
-                activeTab === 'listen'
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              <Mic size={13} />
-              동정
-            </button>
-            <button
-              onClick={() => switchTab('search')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 transition-all ${
-                activeTab === 'search'
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              <Search size={13} />
-              도감
-            </button>
-            <button
-              onClick={() => switchTab('history')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 transition-all ${
-                activeTab === 'history'
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              <History size={13} />
-              기록
-            </button>
+        {/* 중앙 상단: 새 아이콘 + Birdsong */}
+        <button
+          onClick={handleReset}
+          className="flex flex-col items-center space-y-1 text-primary"
+        >
+          <div className="flex items-center space-x-2">
+            <Bird size={32} strokeWidth={2.5} />
+            <h1 className="text-2xl font-bold leading-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-teal-300">
+              Birdsong
+            </h1>
           </div>
+          <p className="text-[11px] text-slate-400 leading-none">산행 새소리 동정 · 도감</p>
+        </button>
+
+        {/* 아랫줄: 소리로 동정 / 도감 검색 / 기록 검색 */}
+        <div className="w-full grid grid-cols-3 gap-1.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl p-1">
           <button
-            onClick={() => {
-              setApiKeyInput(getStoredApiKey());
-              setApiKeyModalOpen(true);
-            }}
-            title={hasApiKey ? 'AI API 키 설정됨' : 'AI API 키 설정'}
-            className={`w-9 h-9 rounded-full border flex items-center justify-center transition-all ${
-              hasApiKey
-                ? 'bg-emerald-500/20 border-emerald-400/70 text-emerald-300'
-                : 'bg-slate-800/80 border-slate-700/80 text-slate-400 hover:text-white'
+            onClick={() => switchTab('listen')}
+            className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              activeTab === 'listen'
+                ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                : 'text-slate-300 hover:text-white'
             }`}
           >
-            <KeyRound size={15} />
+            <Mic size={14} />
+            소리로 동정
+          </button>
+          <button
+            onClick={() => switchTab('search')}
+            className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              activeTab === 'search'
+                ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <Search size={14} />
+            도감 검색
+          </button>
+          <button
+            onClick={() => switchTab('history')}
+            className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              activeTab === 'history'
+                ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <History size={14} />
+            기록 검색
           </button>
         </div>
       </header>
@@ -988,7 +989,7 @@ function App() {
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <KeyRound size={17} className="text-emerald-400" />
-                Claude AI API 키 설정
+                Google Gemini API 키 설정
               </h3>
               <button
                 onClick={() => setApiKeyModalOpen(false)}
@@ -999,16 +1000,16 @@ function App() {
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              입력한 Anthropic API 키는 서버나 GitHub에 전송되지 않고{' '}
+              입력한 Google Gemini API 키는 서버나 GitHub에 전송되지 않고{' '}
               <strong className="text-emerald-300">현재 브라우저(localStorage)에만 저장</strong>됩니다.
-              키가 없으면 주파수 기반 유사 산새 추천 모드로 동작합니다.
+              스펙트로그램과 녹음 오디오를 함께 분석하며, 키가 없으면 주파수 기반 유사 산새 추천 모드로 동작합니다.
             </p>
 
             <input
               type="password"
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
-              placeholder="sk-ant-api03-..."
+              placeholder="AIzaSy..."
               className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-400 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none font-mono"
             />
 
