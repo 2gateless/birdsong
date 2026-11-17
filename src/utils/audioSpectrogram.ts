@@ -218,7 +218,7 @@ export async function analyzeAudioBlob(blob: Blob): Promise<{
       durationSec: Number(durationSec.toFixed(1)),
     };
   } finally {
-    await ctx.close().catch(() => {});
+    await ctx.close().catch(() => undefined);
   }
 }
 
@@ -312,19 +312,19 @@ export async function identifyBirdFromAudio(
 
       if (res.ok) {
         const data = (await res.json()) as {
-          content?: Array<{ text?: string }>;
+          content?: { text?: string }[];
         };
         const raw = (data.content?.[0]?.text ?? '').trim();
-        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        const jsonMatch = /\{[\s\S]*\}/.exec(raw);
         let candidates: IdentificationCandidate[] = [];
 
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]) as {
-            candidates?: Array<{
+            candidates?: {
               name?: string;
               confidence?: string;
               reason?: string;
-            }>;
+            }[];
           };
           if (Array.isArray(parsed.candidates)) {
             candidates = parsed.candidates

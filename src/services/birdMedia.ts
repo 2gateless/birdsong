@@ -110,18 +110,18 @@ export async function fetchBirdMedia(query: string): Promise<BirdInfo> {
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encodedSci}`,
     ),
     fetchJson<{
-      results?: Array<{
-        photos?: Array<{ url?: string }>;
-      }>;
+      results?: {
+        photos?: { url?: string }[];
+      }[];
     }>(
       `https://api.inaturalist.org/v1/observations?taxon_name=${encodedSci}&photos=true&per_page=25&order_by=votes`,
     ),
     fetchJson<{
-      results?: Array<{
+      results?: {
         place_guess?: string;
         observed_on?: string;
-        sounds?: Array<{ file_url?: string }>;
-      }>;
+        sounds?: { file_url?: string }[];
+      }[];
     }>(
       `https://api.inaturalist.org/v1/observations?taxon_name=${encodedSci}&sounds=true&per_page=15&order_by=votes`,
     ),
@@ -129,7 +129,7 @@ export async function fetchBirdMedia(query: string): Promise<BirdInfo> {
       query?: {
         pages?: Record<
           string,
-          { imageinfo?: Array<{ url?: string; thumburl?: string }> }
+          { imageinfo?: { url?: string; thumburl?: string }[] }
         >;
       };
     }>(
@@ -141,7 +141,7 @@ export async function fetchBirdMedia(query: string): Promise<BirdInfo> {
           string,
           {
             title?: string;
-            imageinfo?: Array<{ url?: string; mime?: string }>;
+            imageinfo?: { url?: string; mime?: string }[];
           }
         >;
       };
@@ -151,18 +151,18 @@ export async function fetchBirdMedia(query: string): Promise<BirdInfo> {
       )}&gsrnamespace=6&prop=imageinfo&iiprop=url|mime&format=json&origin=*&gsrlimit=10`,
     ),
     fetchJson<{
-      results?: Array<{
-        media?: Array<{ type?: string; identifier?: string }>;
-      }>;
+      results?: {
+        media?: { type?: string; identifier?: string }[];
+      }[];
     }>(
       `https://api.gbif.org/v1/occurrence/search?scientificName=${encodedSci}&mediaType=StillImage&limit=15`,
     ),
     fetchJson<{
-      results?: Array<{
+      results?: {
         country?: string;
         locality?: string;
-        media?: Array<{ type?: string; identifier?: string; format?: string }>;
-      }>;
+        media?: { type?: string; identifier?: string; format?: string }[];
+      }[];
     }>(
       `https://api.gbif.org/v1/occurrence/search?scientificName=${encodedSci}&mediaType=Sound&limit=15`,
     ),
@@ -201,7 +201,7 @@ export async function fetchBirdMedia(query: string): Promise<BirdInfo> {
   if (commonsImageData?.query?.pages) {
     for (const page of Object.values(commonsImageData.query.pages)) {
       const info = page.imageinfo?.[0];
-      const url = info?.thumburl || info?.url;
+      const url = info?.thumburl ?? info?.url;
       if (url && !skipExt.test(url)) {
         addImage(url, 'Wikimedia');
       }

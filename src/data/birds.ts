@@ -441,7 +441,7 @@ const FEATURED_BIRDS: BirdEntry[] = [
 ];
 
 // 전체 한국 조류 매핑 테이블 (기존 전체 종 보존 + 오류 수정 + 추가 산새)
-const RAW_BIRD_PAIRS: Array<[string, string, string, BirdHabitat?]> = [
+const RAW_BIRD_PAIRS: [string, string, string, BirdHabitat?][] = [
   // 참새목 - 박새과
   ['박새', 'Japanese tit', 'Parus minor', 'mountain'],
   ['진박새', 'Coal tit', 'Periparus ater', 'mountain'],

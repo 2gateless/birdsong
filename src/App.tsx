@@ -123,7 +123,7 @@ function App() {
       streamRef.current = null;
     }
     if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(() => {});
+      void audioCtxRef.current.close().catch(() => undefined);
       audioCtxRef.current = null;
     }
   };
@@ -479,7 +479,7 @@ function App() {
 
             {/* 원터치 대형 녹음 버튼 */}
             <button
-              onClick={startRecording}
+              onClick={() => void startRecording()}
               className="w-36 h-36 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-slate-950 flex flex-col items-center justify-center shadow-[0_0_35px_rgba(16,185,129,0.45)] hover:scale-105 active:scale-95 transition-all"
             >
               <Mic size={44} strokeWidth={2.2} />
@@ -882,7 +882,7 @@ function App() {
               )}
 
               {/* 울음소리 특징 & 요약 */}
-              {(birdInfo.callDescription || birdInfo.summary) && (
+              {(birdInfo.callDescription ?? birdInfo.summary) && (
                 <div className="px-5 pt-4 pb-2 space-y-2.5 bg-slate-900/50">
                   {birdInfo.callDescription && (
                     <div className="bg-emerald-950/30 border border-emerald-800/40 rounded-2xl p-3">
