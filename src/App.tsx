@@ -97,6 +97,7 @@ function App() {
   const rafRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const hasSubHistoryRef = useRef(false);
 
   // 검색 자동완성 & 빠른 탐색 목록
   const suggestions = useMemo(
@@ -132,6 +133,38 @@ function App() {
     return () => {
       cleanupRecordingResources();
     };
+  }, []);
+
+  const isRootScreen =
+    activeTab === 'listen' &&
+    appState === 'idle' &&
+    !lightboxOpen &&
+    !apiKeyModalOpen;
+
+  // 첫 화면이 아닌 하위 화면(도감·기록·녹음·결과·모달) 진입 시 브라우저 히스토리 추가
+  useEffect(() => {
+    if (!isRootScreen && !hasSubHistoryRef.current) {
+      window.history.pushState({ birdsongSub: true }, '');
+      hasSubHistoryRef.current = true;
+    }
+  }, [isRootScreen]);
+
+  // 브라우저/모바일 뒤로가기 시 첫 화면으로 복귀 (첫 화면에서만 앱 종료)
+  useEffect(() => {
+    const handlePopState = () => {
+      hasSubHistoryRef.current = false;
+      cleanupRecordingResources();
+      setLightboxOpen(false);
+      setApiKeyModalOpen(false);
+      setAppState('idle');
+      setActiveTab('listen');
+      setBirdInfo(null);
+      setSelectedImageIdx(0);
+      setErrorMsg('');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   useEffect(() => {
@@ -349,7 +382,12 @@ function App() {
   };
 
   const handleReset = () => {
+    if (hasSubHistoryRef.current) {
+      window.history.back();
+      return;
+    }
     cleanupRecordingResources();
+    setActiveTab('listen');
     setAppState('idle');
     setBirdInfo(null);
     setSelectedImageIdx(0);
@@ -359,6 +397,10 @@ function App() {
 
   const switchTab = (tab: MainTab) => {
     if (appState === 'recording') stopRecording();
+    if (tab === 'listen' && appState !== 'recording' && hasSubHistoryRef.current) {
+      window.history.back();
+      return;
+    }
     setActiveTab(tab);
     if (appState === 'result') {
       setAppState('idle');
@@ -394,15 +436,15 @@ function App() {
         {/* 중앙 상단: 새 아이콘 + Birdsong */}
         <button
           onClick={handleReset}
-          className="flex flex-col items-center space-y-1 text-primary"
+          className="flex flex-col items-center space-y-1.5 text-primary pt-1"
         >
-          <div className="flex items-center space-x-2">
-            <Bird size={32} strokeWidth={2.5} />
-            <h1 className="text-2xl font-bold leading-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-teal-300">
+          <div className="flex items-center space-x-2.5">
+            <Bird size={44} strokeWidth={2.4} />
+            <h1 className="text-4xl font-extrabold tracking-tight leading-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-teal-300">
               Birdsong
             </h1>
           </div>
-          <p className="text-[11px] text-slate-400 leading-none">산행 새소리 동정 · 도감</p>
+          <p className="text-xs text-slate-400 leading-none">산행 새소리 동정 · 도감</p>
         </button>
 
         {/* 아랫줄: 소리로 동정 / 도감 검색 / 기록 검색 */}
