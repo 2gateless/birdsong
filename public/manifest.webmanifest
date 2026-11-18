@@ -1,0 +1,32 @@
+{
+  "id": "./",
+  "name": "Birdsong — 산행 새소리 동정 · 도감",
+  "short_name": "Birdsong",
+  "description": "산행 중 새소리를 듣고 스펙트로그램·AI·주파수로 새를 동정하는 한국 조류 도감",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
